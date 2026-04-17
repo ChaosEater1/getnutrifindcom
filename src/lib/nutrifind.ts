@@ -20,6 +20,8 @@ export type Product = {
   labels_tags?: string[];
   code?: string;
   quantity?: string;
+  stores?: string;
+  stores_tags?: string[];
 };
 
 export type ScoredProduct = Product & { _score: number };

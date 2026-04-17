@@ -11,6 +11,7 @@ import {
   scoreWord,
 } from "@/lib/nutrifind";
 import { ProductDetail } from "@/components/ProductDetail";
+import { WhereToBuy } from "@/components/WhereToBuy";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -57,7 +58,7 @@ function NutriFindPage() {
       try {
         const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
           term
-        )}&search_simple=1&action=process&json=1&page_size=30&fields=product_name,brands,nutriments,ingredients_text,labels_tags,code,quantity`;
+        )}&search_simple=1&action=process&json=1&page_size=30&fields=product_name,brands,nutriments,ingredients_text,labels_tags,code,quantity,stores,stores_tags`;
         const res = await fetch(url);
         const data = await res.json();
         const products: Product[] = (data.products || [])
@@ -230,6 +231,8 @@ function NutriFindPage() {
                           <div className="top-price-per">est. price</div>
                         </div>
                       </div>
+
+                      <WhereToBuy item={topPick} variant="dark" />
 
                       <div
                         className="expand-toggle"

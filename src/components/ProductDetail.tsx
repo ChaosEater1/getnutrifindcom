@@ -1,4 +1,5 @@
 import { type ScoredProduct, kcal, fmt, buildExplanation } from "@/lib/nutrifind";
+import { WhereToBuy } from "@/components/WhereToBuy";
 
 interface Props {
   item: ScoredProduct;
@@ -96,6 +97,8 @@ export function ProductDetail({ item, variant = "light" }: Props) {
           ⚠️ Contains potentially processed ingredients (highlighted in red above).
         </div>
       )}
+
+      <WhereToBuy item={item} variant={variant} />
     </div>
   );
 }
