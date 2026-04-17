@@ -11,6 +11,7 @@ import {
   scoreWord,
 } from "@/lib/nutrifind";
 import { ProductDetail } from "@/components/ProductDetail";
+import { WhereToBuy } from "@/components/WhereToBuy";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -230,6 +231,8 @@ function NutriFindPage() {
                           <div className="top-price-per">est. price</div>
                         </div>
                       </div>
+
+                      <WhereToBuy item={topPick} variant="dark" />
 
                       <div
                         className="expand-toggle"
