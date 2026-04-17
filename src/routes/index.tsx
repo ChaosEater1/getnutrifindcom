@@ -85,7 +85,7 @@ function NutriFindPage() {
         setLoading(false);
       }
     },
-    [query]
+    [query, mode]
   );
 
   const toggleFilter = (id: string) =>
@@ -131,6 +131,21 @@ function NutriFindPage() {
             >
               {loading ? "…" : "🔍 Search"}
             </button>
+          </div>
+
+          <div className="mode-toggle" role="radiogroup" aria-label="Search type">
+            {MODES.map((m) => (
+              <button
+                key={m.id}
+                role="radio"
+                aria-checked={mode === m.id}
+                className={`mode-btn ${mode === m.id ? "active" : ""}`}
+                onClick={() => setMode(m.id)}
+                title={m.hint}
+              >
+                {m.label}
+              </button>
+            ))}
           </div>
 
           <div className="quick-chips">
