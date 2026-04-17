@@ -57,7 +57,7 @@ function NutriFindPage() {
       try {
         const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
           term
-        )}&search_simple=1&action=process&json=1&page_size=30&fields=product_name,brands,nutriments,ingredients_text,labels_tags,code,quantity`;
+        )}&search_simple=1&action=process&json=1&page_size=30&fields=product_name,brands,nutriments,ingredients_text,labels_tags,code,quantity,stores,stores_tags`;
         const res = await fetch(url);
         const data = await res.json();
         const products: Product[] = (data.products || [])
