@@ -17,6 +17,7 @@ export type Product = {
   brands?: string;
   nutriments?: Nutriments;
   ingredients_text?: string;
+  ingredients_text_en?: string;
   labels_tags?: string[];
   code?: string;
   quantity?: string;
