@@ -72,10 +72,15 @@ function NutriFindPage() {
       try {
         const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
           refinedTerm
-        )}&search_simple=1&action=process&json=1&page_size=30&fields=product_name,brands,nutriments,ingredients_text,labels_tags,code,quantity,stores,stores_tags`;
+        )}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,product_name_en,brands,nutriments,ingredients_text,ingredients_text_en,labels_tags,code,quantity,stores,stores_tags`;
         const res = await fetch(url);
         const data = await res.json();
         const products: Product[] = (data.products || [])
+          .map((p: Product & { product_name_en?: string }) => ({
+            ...p,
+            product_name: p.product_name_en || p.product_name,
+            ingredients_text: p.ingredients_text_en || p.ingredients_text,
+          }))
           .filter((p: Product) => p.product_name && p.nutriments)
           .slice(0, 20);
         setRaw(products);
