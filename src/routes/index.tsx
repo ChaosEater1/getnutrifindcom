@@ -320,6 +320,13 @@ function NutriFindPage() {
                 </div>
               </>
             )}
+
+            {scored.length > 0 && (
+              <p className="price-disclaimer">
+                💡 Prices shown are rough estimates only — actual in-store and online prices vary
+                by retailer, location, and offers.
+              </p>
+            )}
           </>
         )}
       </main>
