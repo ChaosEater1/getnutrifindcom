@@ -28,6 +28,11 @@ export const Route = createFileRoute("/")({
 });
 
 const QUICK = ["Granola", "Greek Yogurt", "Protein Bar", "Bread", "Oat Milk", "Chicken", "Eggs"];
+type SearchMode = "ingredient" | "meal";
+const MODES: { id: SearchMode; label: string; hint: string }[] = [
+  { id: "ingredient", label: "🥩 Just the ingredient", hint: "e.g. plain beef to cook with" },
+  { id: "meal", label: "🍔 Meal / prepared product", hint: "e.g. beef burger, ready meal" },
+];
 const FILTERS: { id: string; label: string }[] = [
   { id: "high_protein", label: "💪 High Protein" },
   { id: "low_sugar", label: "🍬 Low Sugar" },
@@ -43,11 +48,13 @@ function NutriFindPage() {
   const [searched, setSearched] = useState(false);
   const [expanded, setExpanded] = useState<string | number | null>(null);
   const [filters, setFilters] = useState<string[]>([]);
+  const [mode, setMode] = useState<SearchMode>("ingredient");
 
   const doSearch = useCallback(
-    async (q?: string) => {
+    async (q?: string, modeOverride?: SearchMode) => {
       const term = (q ?? query).trim();
       if (!term) return;
+      const activeMode = modeOverride ?? mode;
       setLoading(true);
       setError(null);
       setRaw([]);
@@ -55,9 +62,16 @@ function NutriFindPage() {
       setExpanded(null);
       setFilters([]);
 
+      // Tweak the query to bias Open Food Facts results toward whole
+      // ingredients vs. prepared meals/products.
+      const refinedTerm =
+        activeMode === "meal"
+          ? term
+          : `${term} raw fresh`;
+
       try {
         const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
-          term
+          refinedTerm
         )}&search_simple=1&action=process&json=1&page_size=30&fields=product_name,brands,nutriments,ingredients_text,labels_tags,code,quantity,stores,stores_tags`;
         const res = await fetch(url);
         const data = await res.json();
