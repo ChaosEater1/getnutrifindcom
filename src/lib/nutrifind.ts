@@ -13,6 +13,8 @@ export type Nutriments = {
   fiber_100g?: number;
 };
 
+export type ProductSource = "OFF" | "USDA";
+
 export type Product = {
   product_name?: string;
   brands?: string;
@@ -26,6 +28,9 @@ export type Product = {
   stores_tags?: string[];
   nutriscore_grade?: string;
   image_small_url?: string;
+  _source?: ProductSource;
+  _usdaPatched?: boolean;
+  _fdcId?: number;
 };
 
 export type AdditiveSeverity = "high" | "medium" | "low";
@@ -152,8 +157,144 @@ export function passesFilters(item: ScoredProduct, active: string[]): boolean {
       if (!labels.includes("vegan") && !labels.includes("plant")) return false;
     }
     if (f === "no_additives" && (item._additives?.length || 0) > 0) return false;
+    if (f === "usda_only" && item._source !== "USDA") return false;
+    if (f === "off_only" && item._source !== "OFF") return false;
   }
   return true;
+}
+
+// ─── USDA FoodData Central ────────────────────────────────────────────────────
+// DEMO_KEY works for low-volume testing (~30 req/hr). Get a free key at
+// https://fdc.nal.usda.gov/api-guide.html for higher limits.
+const USDA_API_KEY = "DEMO_KEY";
+
+const USDA_IDS = {
+  kcal: 1008,
+  protein: 1003,
+  fat: 1004,
+  carbs: 1005,
+  fiber: 1079,
+  sugar: 2000,
+  satFat: 1258,
+  sodium: 1093,
+} as const;
+
+type UsdaNutrient = {
+  nutrientId?: number;
+  nutrient?: { id?: number };
+  value?: number;
+  amount?: number;
+};
+
+type UsdaFood = {
+  fdcId?: number;
+  description?: string;
+  brandOwner?: string;
+  brandName?: string;
+  ingredients?: string;
+  foodNutrients?: UsdaNutrient[];
+};
+
+function extractUsdaNutrients(foodNutrients?: UsdaNutrient[]): Nutriments {
+  const m: Record<number, number> = {};
+  for (const n of foodNutrients || []) {
+    const id = n.nutrientId ?? n.nutrient?.id;
+    if (id != null) m[id] = n.value ?? n.amount ?? 0;
+  }
+  const sodiumMg = m[USDA_IDS.sodium] || 0;
+  return {
+    "energy-kcal_100g": m[USDA_IDS.kcal] || 0,
+    proteins_100g: m[USDA_IDS.protein] || 0,
+    fat_100g: m[USDA_IDS.fat] || 0,
+    carbohydrates_100g: m[USDA_IDS.carbs] || 0,
+    fiber_100g: m[USDA_IDS.fiber] || 0,
+    sugars_100g: m[USDA_IDS.sugar] || 0,
+    "saturated-fat_100g": m[USDA_IDS.satFat] || 0,
+    salt_100g: (sodiumMg * 2.5) / 1000,
+  };
+}
+
+function normaliseUsda(food: UsdaFood): Product {
+  return {
+    product_name: food.description,
+    brands: food.brandOwner || food.brandName || "",
+    ingredients_text: food.ingredients || "",
+    nutriments: extractUsdaNutrients(food.foodNutrients),
+    nutriscore_grade: "",
+    labels_tags: [],
+    _source: "USDA",
+    _fdcId: food.fdcId,
+    code: food.fdcId ? `usda-${food.fdcId}` : undefined,
+  };
+}
+
+export async function fetchUsda(query: string): Promise<Product[]> {
+  try {
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(
+      query
+    )}&dataType=Branded,SR%20Legacy,Foundation&pageSize=15&api_key=${USDA_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { foods?: UsdaFood[] };
+    return (data.foods || [])
+      .filter((f) => f.description)
+      .map(normaliseUsda);
+  } catch {
+    return [];
+  }
+}
+
+export function mergeProductSources(off: Product[], usda: Product[]): Product[] {
+  const merged: Product[] = [];
+  const keyOf = (p: Product) => (p.product_name || "").toLowerCase().trim();
+  const seen = new Set<string>();
+
+  for (const p of off) {
+    const k = keyOf(p);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    merged.push({ ...p, _source: "OFF" });
+  }
+
+  for (const p of usda) {
+    const k = keyOf(p);
+    if (!k) continue;
+    const existing = merged.find((o) => keyOf(o) === k);
+    if (existing) {
+      const n = existing.nutriments || {};
+      const u = p.nutriments || {};
+      const fields: (keyof Nutriments)[] = [
+        "proteins_100g",
+        "fiber_100g",
+        "sugars_100g",
+        "saturated-fat_100g",
+        "salt_100g",
+        "energy-kcal_100g",
+        "carbohydrates_100g",
+        "fat_100g",
+      ];
+      let patched = false;
+      const next: Nutriments = { ...n };
+      for (const f of fields) {
+        if ((next[f] == null || next[f] === 0) && u[f]) {
+          next[f] = u[f];
+          patched = true;
+        }
+      }
+      if (patched) {
+        existing.nutriments = next;
+        existing._usdaPatched = true;
+      }
+      if (!existing.ingredients_text && p.ingredients_text) {
+        existing.ingredients_text = p.ingredients_text;
+      }
+    } else if (!seen.has(k)) {
+      seen.add(k);
+      merged.push(p);
+    }
+  }
+
+  return merged;
 }
 
 export function fakePrice(code?: string): string {

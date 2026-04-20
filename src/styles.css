@@ -283,6 +283,29 @@ html, body {
 .pill-green { background:var(--green-pale); color:#166534; }
 .pill-amber { background:var(--amber-light); color:#854D0E; }
 .pill-red   { background:var(--red-light);   color:#991B1B; }
+.pill-off   { background:#E8F4FD;            color:#1A6FA8; }
+.pill-usda  { background:#F0F8E8;            color:#3A7D27; }
+
+/* Source coverage bar */
+.coverage-bar {
+  display:flex; flex-wrap:wrap; gap:8px;
+  margin: 4px 0 14px;
+}
+.src-pill {
+  display:inline-flex; align-items:center; gap:4px;
+  font-family:'Source Sans 3',sans-serif;
+  font-size:12px; font-weight:600;
+  padding:5px 10px; border-radius:14px;
+}
+.src-pill.src-off     { background:#E8F4FD; color:#1A6FA8; }
+.src-pill.src-usda    { background:#F0F8E8; color:#3A7D27; }
+.src-pill.src-patched { background:#FEF3C7; color:#92400E; }
+.top-card-source { margin: 8px 0 4px; }
+.top-card-source .src-pill { background: rgba(255,255,255,0.18); color:#fff; }
+.loading-sub {
+  font-family:'Source Sans 3',sans-serif;
+  font-size:12px; opacity:0.65; margin-top:4px;
+}
 .result-right {
   display:flex; flex-direction:column; align-items:flex-end;
   gap:5px; flex-shrink:0;

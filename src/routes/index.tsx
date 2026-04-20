@@ -5,8 +5,10 @@ import {
   type ScoredProduct,
   calcScore,
   fakePrice,
+  fetchUsda,
   fmt,
   kcal,
+  mergeProductSources,
   passesFilters,
   scanAdditives,
   scoreClass,
@@ -43,12 +45,15 @@ const FILTERS: { id: string; label: string }[] = [
   { id: "high_fibre", label: "🌿 High Fibre" },
   { id: "vegan", label: "🌱 Vegan" },
   { id: "no_additives", label: "⚠️ No Flagged Additives" },
+  { id: "usda_only", label: "🌾 USDA Only" },
+  { id: "off_only", label: "📦 OFF Only" },
 ];
 
 function NutriFindPage() {
   const [query, setQuery] = useState("");
   const [rawResults, setRaw] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [expanded, setExpanded] = useState<string | number | null>(null);
@@ -57,6 +62,7 @@ function NutriFindPage() {
   const [aiTip, setAiTip] = useState("");
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [coverage, setCoverage] = useState({ off: 0, usda: 0, patched: 0 });
 
   const loadAiTip = useCallback(async (term: string) => {
     setAiLoading(true);
@@ -84,31 +90,55 @@ function NutriFindPage() {
       setSearched(true);
       setExpanded(null);
       setFilters([]);
+      setCoverage({ off: 0, usda: 0, patched: 0 });
 
       // Kick off the AI tip in parallel
       loadAiTip(term);
 
       const refinedTerm = activeMode === "meal" ? term : `${term} raw fresh`;
 
+      setLoadingMsg("Searching Open Food Facts + USDA…");
+
+      const offPromise = (async (): Promise<Product[]> => {
+        try {
+          const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
+            refinedTerm
+          )}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,product_name_en,brands,nutriments,nutriscore_grade,ingredients_text,ingredients_text_en,labels_tags,code,quantity,stores,stores_tags,image_small_url`;
+          const res = await fetch(url);
+          const data = await res.json();
+          return (data.products || [])
+            .map((p: Product & { product_name_en?: string }) => ({
+              ...p,
+              product_name: p.product_name_en || p.product_name,
+              ingredients_text: p.ingredients_text_en || p.ingredients_text,
+            }))
+            .filter((p: Product) => p.product_name && p.nutriments)
+            .slice(0, 20);
+        } catch {
+          return [];
+        }
+      })();
+
+      const usdaPromise = fetchUsda(refinedTerm);
+
       try {
-        const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
-          refinedTerm
-        )}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,product_name_en,brands,nutriments,nutriscore_grade,ingredients_text,ingredients_text_en,labels_tags,code,quantity,stores,stores_tags,image_small_url`;
-        const res = await fetch(url);
-        const data = await res.json();
-        const products: Product[] = (data.products || [])
-          .map((p: Product & { product_name_en?: string }) => ({
-            ...p,
-            product_name: p.product_name_en || p.product_name,
-            ingredients_text: p.ingredients_text_en || p.ingredients_text,
-          }))
-          .filter((p: Product) => p.product_name && p.nutriments)
-          .slice(0, 20);
-        setRaw(products);
+        const [off, usda] = await Promise.all([offPromise, usdaPromise]);
+        setLoadingMsg("Merging & scoring…");
+        const merged = mergeProductSources(off, usda).slice(0, 25);
+        setCoverage({
+          off: off.length,
+          usda: usda.length,
+          patched: merged.filter((p) => p._usdaPatched).length,
+        });
+        setRaw(merged);
+        if (off.length === 0 && usda.length === 0) {
+          setError("No data returned from either source. Check your connection and try again.");
+        }
       } catch {
         setError("Couldn't load results. Check your connection and try again.");
       } finally {
         setLoading(false);
+        setLoadingMsg("");
       }
     },
     [query, mode, loadAiTip]
@@ -202,7 +232,8 @@ function NutriFindPage() {
         {loading && (
           <div className="loading">
             <div className="spinner" />
-            <div className="loading-text">Fetching real product data…</div>
+            <div className="loading-text">{loadingMsg || "Fetching real product data…"}</div>
+            <div className="loading-sub">Querying Open Food Facts + USDA in parallel</div>
           </div>
         )}
 
@@ -221,6 +252,17 @@ function NutriFindPage() {
 
         {!loading && searched && !error && (
           <>
+            {rawResults.length > 0 && (
+              <div className="coverage-bar">
+                <span className="src-pill src-off">📦 {coverage.off} Open Food Facts</span>
+                <span className="src-pill src-usda">🌾 {coverage.usda} USDA</span>
+                {coverage.patched > 0 && (
+                  <span className="src-pill src-patched">
+                    ✨ {coverage.patched} enriched
+                  </span>
+                )}
+              </div>
+            )}
             {rawResults.length > 0 && (
               <div className="filter-bar">
                 {FILTERS.map((f) => (
@@ -259,6 +301,12 @@ function NutriFindPage() {
                       <div className="top-card-brand">
                         {topPick.brands || "Unknown brand"}
                         {topPick.quantity ? ` · ${topPick.quantity}` : ""}
+                      </div>
+                      <div className="top-card-source">
+                        <span className={`src-pill ${topPick._source === "USDA" ? "src-usda" : "src-off"}`}>
+                          {topPick._source === "USDA" ? "🌾 USDA" : "📦 Open Food Facts"}
+                          {topPick._usdaPatched ? " · ✨ enriched with USDA" : ""}
+                        </span>
                       </div>
 
                       {topPick.image_small_url && (
@@ -365,6 +413,13 @@ function NutriFindPage() {
                                 </>
                               )}
                               <span className={`pill ${pillClass}`}>{scoreWord(sc)}</span>
+                              <span
+                                className={`pill ${item._source === "USDA" ? "pill-usda" : "pill-off"}`}
+                                title={item._usdaPatched ? "Enriched with USDA data" : ""}
+                              >
+                                {item._source === "USDA" ? "🌾 USDA" : "📦 OFF"}
+                                {item._usdaPatched ? " ✨" : ""}
+                              </span>
                               {additiveCount > 0 && (
                                 <span className="pill pill-red">⚠️ {additiveCount}</span>
                               )}
