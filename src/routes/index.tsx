@@ -232,7 +232,8 @@ function NutriFindPage() {
         {loading && (
           <div className="loading">
             <div className="spinner" />
-            <div className="loading-text">Fetching real product data…</div>
+            <div className="loading-text">{loadingMsg || "Fetching real product data…"}</div>
+            <div className="loading-sub">Querying Open Food Facts + USDA in parallel</div>
           </div>
         )}
 
