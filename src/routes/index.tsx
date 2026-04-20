@@ -302,6 +302,12 @@ function NutriFindPage() {
                         {topPick.brands || "Unknown brand"}
                         {topPick.quantity ? ` · ${topPick.quantity}` : ""}
                       </div>
+                      <div className="top-card-source">
+                        <span className={`src-pill ${topPick._source === "USDA" ? "src-usda" : "src-off"}`}>
+                          {topPick._source === "USDA" ? "🌾 USDA" : "📦 Open Food Facts"}
+                          {topPick._usdaPatched ? " · ✨ enriched with USDA" : ""}
+                        </span>
+                      </div>
 
                       {topPick.image_small_url && (
                         <img
