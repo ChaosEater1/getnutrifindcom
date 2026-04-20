@@ -5,8 +5,10 @@ import {
   type ScoredProduct,
   calcScore,
   fakePrice,
+  fetchUsda,
   fmt,
   kcal,
+  mergeProductSources,
   passesFilters,
   scanAdditives,
   scoreClass,
@@ -43,6 +45,8 @@ const FILTERS: { id: string; label: string }[] = [
   { id: "high_fibre", label: "🌿 High Fibre" },
   { id: "vegan", label: "🌱 Vegan" },
   { id: "no_additives", label: "⚠️ No Flagged Additives" },
+  { id: "usda_only", label: "🌾 USDA Only" },
+  { id: "off_only", label: "📦 OFF Only" },
 ];
 
 function NutriFindPage() {
