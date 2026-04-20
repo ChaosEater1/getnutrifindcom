@@ -53,6 +53,7 @@ function NutriFindPage() {
   const [query, setQuery] = useState("");
   const [rawResults, setRaw] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [expanded, setExpanded] = useState<string | number | null>(null);
@@ -61,6 +62,7 @@ function NutriFindPage() {
   const [aiTip, setAiTip] = useState("");
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [coverage, setCoverage] = useState({ off: 0, usda: 0, patched: 0 });
 
   const loadAiTip = useCallback(async (term: string) => {
     setAiLoading(true);
