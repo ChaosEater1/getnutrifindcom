@@ -2,16 +2,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import {
   type Product,
+  type ScoredProduct,
   calcScore,
   fakePrice,
   fmt,
   kcal,
   passesFilters,
+  scanAdditives,
   scoreClass,
   scoreWord,
 } from "@/lib/nutrifind";
 import { ProductDetail } from "@/components/ProductDetail";
 import { WhereToBuy } from "@/components/WhereToBuy";
+import { AiTip } from "@/components/AiTip";
+import { fetchNutritionTip } from "@/lib/aiTip";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,7 +24,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Search any food and compare real nutrition data across products, ranked by a transparent health score.",
+          "Search any food and compare real nutrition data across products, ranked by a transparent health score with additive-aware analysis.",
       },
     ],
   }),
@@ -38,6 +42,7 @@ const FILTERS: { id: string; label: string }[] = [
   { id: "low_sugar", label: "🍬 Low Sugar" },
   { id: "high_fibre", label: "🌿 High Fibre" },
   { id: "vegan", label: "🌱 Vegan" },
+  { id: "no_additives", label: "⚠️ No Flagged Additives" },
 ];
 
 function NutriFindPage() {
@@ -49,6 +54,24 @@ function NutriFindPage() {
   const [expanded, setExpanded] = useState<string | number | null>(null);
   const [filters, setFilters] = useState<string[]>([]);
   const [mode, setMode] = useState<SearchMode>("ingredient");
+  const [aiTip, setAiTip] = useState("");
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const loadAiTip = useCallback(async (term: string) => {
+    setAiLoading(true);
+    setAiTip("");
+    setAiError(null);
+    try {
+      const result = await fetchNutritionTip({ data: { query: term } });
+      if (result.error) setAiError(result.error);
+      else setAiTip(result.tip);
+    } catch {
+      setAiError("Couldn't fetch nutritionist tip.");
+    } finally {
+      setAiLoading(false);
+    }
+  }, []);
 
   const doSearch = useCallback(
     async (q?: string, modeOverride?: SearchMode) => {
@@ -62,17 +85,15 @@ function NutriFindPage() {
       setExpanded(null);
       setFilters([]);
 
-      // Tweak the query to bias Open Food Facts results toward whole
-      // ingredients vs. prepared meals/products.
-      const refinedTerm =
-        activeMode === "meal"
-          ? term
-          : `${term} raw fresh`;
+      // Kick off the AI tip in parallel
+      loadAiTip(term);
+
+      const refinedTerm = activeMode === "meal" ? term : `${term} raw fresh`;
 
       try {
         const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
           refinedTerm
-        )}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,product_name_en,brands,nutriments,ingredients_text,ingredients_text_en,labels_tags,code,quantity,stores,stores_tags`;
+        )}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,product_name_en,brands,nutriments,nutriscore_grade,ingredients_text,ingredients_text_en,labels_tags,code,quantity,stores,stores_tags,image_small_url`;
         const res = await fetch(url);
         const data = await res.json();
         const products: Product[] = (data.products || [])
@@ -90,14 +111,18 @@ function NutriFindPage() {
         setLoading(false);
       }
     },
-    [query, mode]
+    [query, mode, loadAiTip]
   );
 
   const toggleFilter = (id: string) =>
     setFilters((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
 
-  const scored = rawResults
-    .map((p) => ({ ...p, _score: calcScore(p.nutriments || {}) }))
+  const scored: ScoredProduct[] = rawResults
+    .map((p) => ({
+      ...p,
+      _score: calcScore(p.nutriments || {}, p),
+      _additives: scanAdditives(p.ingredients_text),
+    }))
     .filter((p) => passesFilters(p, filters))
     .sort((a, b) => b._score - a._score);
 
@@ -115,7 +140,7 @@ function NutriFindPage() {
           <em>shop better.</em>
         </h1>
         <p className="hero-sub">
-          Search any food to compare real nutrition data across products — ranked by health score.
+          Real products · real ingredients · additive-aware health scores.
         </p>
 
         <div className="search-wrap">
@@ -172,6 +197,8 @@ function NutriFindPage() {
 
       {/* MAIN */}
       <main className="main">
+        {searched && <AiTip loading={aiLoading} tip={aiTip} error={aiError} />}
+
         {loading && (
           <div className="loading">
             <div className="spinner" />
@@ -187,7 +214,7 @@ function NutriFindPage() {
             <h2 className="empty-title">What are you shopping for?</h2>
             <p className="empty-sub">
               Search any food above or tap a quick search to see real nutrition data ranked by
-              health score.
+              health score — with watchful eyes on additives.
             </p>
           </div>
         )}
@@ -224,6 +251,7 @@ function NutriFindPage() {
                   const n = topPick.nutriments || {};
                   const sc = topPick._score;
                   const isOpen = expanded === "top";
+                  const additives = topPick._additives || [];
                   return (
                     <section className="top-card">
                       <div className="top-card-eyebrow">🏆 Recommended</div>
@@ -232,6 +260,15 @@ function NutriFindPage() {
                         {topPick.brands || "Unknown brand"}
                         {topPick.quantity ? ` · ${topPick.quantity}` : ""}
                       </div>
+
+                      {topPick.image_small_url && (
+                        <img
+                          src={topPick.image_small_url}
+                          alt={topPick.product_name}
+                          className="top-card-img"
+                          loading="lazy"
+                        />
+                      )}
 
                       <div className="nutr-grid">
                         <div className="nutr-cell">
@@ -251,6 +288,14 @@ function NutriFindPage() {
                           <div className="nutr-lbl">fat</div>
                         </div>
                       </div>
+
+                      {additives.length > 0 ? (
+                        <div className="additive-summary danger">
+                          ⚠️ {additives.length} flagged additive{additives.length > 1 ? "s" : ""}
+                        </div>
+                      ) : topPick.ingredients_text ? (
+                        <div className="additive-summary clean">✓ No flagged additives</div>
+                      ) : null}
 
                       <div className="top-card-footer">
                         <div className="score-row">
@@ -293,6 +338,7 @@ function NutriFindPage() {
                     const isOpen = expanded === i;
                     const pillClass =
                       cls === "high" ? "pill-green" : cls === "mid" ? "pill-amber" : "pill-red";
+                    const additiveCount = item._additives?.length || 0;
                     return (
                       <article key={(item.code || "") + i} className="result-card">
                         <div
@@ -300,6 +346,14 @@ function NutriFindPage() {
                           onClick={() => setExpanded(isOpen ? null : i)}
                         >
                           <div className="result-rank">#{i + 2}</div>
+                          {item.image_small_url && (
+                            <img
+                              src={item.image_small_url}
+                              alt=""
+                              className="result-thumb"
+                              loading="lazy"
+                            />
+                          )}
                           <div className="result-info">
                             <div className="result-name">{item.product_name}</div>
                             <div className="result-meta">
@@ -311,6 +365,9 @@ function NutriFindPage() {
                                 </>
                               )}
                               <span className={`pill ${pillClass}`}>{scoreWord(sc)}</span>
+                              {additiveCount > 0 && (
+                                <span className="pill pill-red">⚠️ {additiveCount}</span>
+                              )}
                             </div>
                           </div>
                           <div className="result-right">
