@@ -90,31 +90,55 @@ function NutriFindPage() {
       setSearched(true);
       setExpanded(null);
       setFilters([]);
+      setCoverage({ off: 0, usda: 0, patched: 0 });
 
       // Kick off the AI tip in parallel
       loadAiTip(term);
 
       const refinedTerm = activeMode === "meal" ? term : `${term} raw fresh`;
 
+      setLoadingMsg("Searching Open Food Facts + USDA…");
+
+      const offPromise = (async (): Promise<Product[]> => {
+        try {
+          const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
+            refinedTerm
+          )}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,product_name_en,brands,nutriments,nutriscore_grade,ingredients_text,ingredients_text_en,labels_tags,code,quantity,stores,stores_tags,image_small_url`;
+          const res = await fetch(url);
+          const data = await res.json();
+          return (data.products || [])
+            .map((p: Product & { product_name_en?: string }) => ({
+              ...p,
+              product_name: p.product_name_en || p.product_name,
+              ingredients_text: p.ingredients_text_en || p.ingredients_text,
+            }))
+            .filter((p: Product) => p.product_name && p.nutriments)
+            .slice(0, 20);
+        } catch {
+          return [];
+        }
+      })();
+
+      const usdaPromise = fetchUsda(refinedTerm);
+
       try {
-        const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
-          refinedTerm
-        )}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,product_name_en,brands,nutriments,nutriscore_grade,ingredients_text,ingredients_text_en,labels_tags,code,quantity,stores,stores_tags,image_small_url`;
-        const res = await fetch(url);
-        const data = await res.json();
-        const products: Product[] = (data.products || [])
-          .map((p: Product & { product_name_en?: string }) => ({
-            ...p,
-            product_name: p.product_name_en || p.product_name,
-            ingredients_text: p.ingredients_text_en || p.ingredients_text,
-          }))
-          .filter((p: Product) => p.product_name && p.nutriments)
-          .slice(0, 20);
-        setRaw(products);
+        const [off, usda] = await Promise.all([offPromise, usdaPromise]);
+        setLoadingMsg("Merging & scoring…");
+        const merged = mergeProductSources(off, usda).slice(0, 25);
+        setCoverage({
+          off: off.length,
+          usda: usda.length,
+          patched: merged.filter((p) => p._usdaPatched).length,
+        });
+        setRaw(merged);
+        if (off.length === 0 && usda.length === 0) {
+          setError("No data returned from either source. Check your connection and try again.");
+        }
       } catch {
         setError("Couldn't load results. Check your connection and try again.");
       } finally {
         setLoading(false);
+        setLoadingMsg("");
       }
     },
     [query, mode, loadAiTip]
