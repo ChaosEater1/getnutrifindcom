@@ -253,6 +253,17 @@ function NutriFindPage() {
         {!loading && searched && !error && (
           <>
             {rawResults.length > 0 && (
+              <div className="coverage-bar">
+                <span className="src-pill src-off">📦 {coverage.off} Open Food Facts</span>
+                <span className="src-pill src-usda">🌾 {coverage.usda} USDA</span>
+                {coverage.patched > 0 && (
+                  <span className="src-pill src-patched">
+                    ✨ {coverage.patched} enriched
+                  </span>
+                )}
+              </div>
+            )}
+            {rawResults.length > 0 && (
               <div className="filter-bar">
                 {FILTERS.map((f) => (
                   <button
