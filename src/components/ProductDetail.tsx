@@ -14,10 +14,7 @@ export function ProductDetail({ item, variant = "light" }: Props) {
     .filter(Boolean)
     .slice(0, 14);
 
-  const flagRegex = /sugar|syrup|palm|fructose|maltodextrin|colour|color|flavor|flavour|artificial|preservative|e\d{3}/i;
-  const flagged = ingrs.filter((i) => flagRegex.test(i));
-  const clean = ingrs.filter((i) => !flagged.includes(i));
-
+  const additives = item._additives || [];
   const { good, bad, summary } = buildExplanation(item);
 
   const nutrCells: Array<[string, string, string]> = [
@@ -43,17 +40,31 @@ export function ProductDetail({ item, variant = "light" }: Props) {
         ))}
       </div>
 
+      {additives.length > 0 && (
+        <>
+          <h4>⚠️ Flagged Additives</h4>
+          <div className="additive-list">
+            {additives.map((a) => (
+              <div key={a.name} className={`additive-item severity-${a.severity}`}>
+                <div className="additive-head">
+                  <strong>{a.name}</strong>
+                  <span className={`additive-badge sev-${a.severity}`}>
+                    {a.severity} risk · −{a.penalty} pts
+                  </span>
+                </div>
+                <p className="additive-note">{a.note}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {ingrs.length > 0 && (
         <>
           <h4>Ingredients</h4>
           <div className="ingr-list">
-            {clean.map((i, idx) => (
-              <span key={`c-${idx}`} className="ingr-tag">
-                {i}
-              </span>
-            ))}
-            {flagged.map((i, idx) => (
-              <span key={`f-${idx}`} className="ingr-tag bad">
+            {ingrs.map((i, idx) => (
+              <span key={`i-${idx}`} className="ingr-tag">
                 {i}
               </span>
             ))}
@@ -89,12 +100,6 @@ export function ProductDetail({ item, variant = "light" }: Props) {
               <li key={i}>{b}</li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {flagged.length > 0 && (
-        <div className="danger-box">
-          ⚠️ Contains potentially processed ingredients (highlighted in red above).
         </div>
       )}
 
