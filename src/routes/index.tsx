@@ -413,6 +413,13 @@ function NutriFindPage() {
                                 </>
                               )}
                               <span className={`pill ${pillClass}`}>{scoreWord(sc)}</span>
+                              <span
+                                className={`pill ${item._source === "USDA" ? "pill-usda" : "pill-off"}`}
+                                title={item._usdaPatched ? "Enriched with USDA data" : ""}
+                              >
+                                {item._source === "USDA" ? "🌾 USDA" : "📦 OFF"}
+                                {item._usdaPatched ? " ✨" : ""}
+                              </span>
                               {additiveCount > 0 && (
                                 <span className="pill pill-red">⚠️ {additiveCount}</span>
                               )}
