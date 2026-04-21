@@ -63,6 +63,7 @@ function NutriFindPage() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [coverage, setCoverage] = useState({ off: 0, usda: 0, patched: 0 });
+  const [offUnavailable, setOffUnavailable] = useState(false);
 
   const loadAiTip = useCallback(async (term: string) => {
     setAiLoading(true);
@@ -91,6 +92,7 @@ function NutriFindPage() {
       setExpanded(null);
       setFilters([]);
       setCoverage({ off: 0, usda: 0, patched: 0 });
+      setOffUnavailable(false);
 
       // Kick off the AI tip in parallel
       loadAiTip(term);
@@ -101,14 +103,24 @@ function NutriFindPage() {
 
       setLoadingMsg("Searching Open Food Facts + USDA…");
 
-      const offPromise = (async (): Promise<Product[]> => {
+      type OffResult = { products: Product[]; unavailable: boolean };
+      const offPromise = (async (): Promise<OffResult> => {
         try {
           const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
             term
           )}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,product_name_en,brands,nutriments,nutriscore_grade,ingredients_text,ingredients_text_en,labels_tags,code,quantity,stores,stores_tags,image_small_url`;
           const res = await fetch(url);
-          const data = await res.json();
-          return (data.products || [])
+          // OFF sometimes returns an HTML "Page temporarily unavailable" page during rate-limits
+          // or maintenance, with a 200 status. Detect by content-type / response shape.
+          const contentType = res.headers.get("content-type") || "";
+          if (!res.ok || !contentType.includes("json")) {
+            return { products: [], unavailable: true };
+          }
+          const data = await res.json().catch(() => null);
+          if (!data || typeof data !== "object" || !("products" in data)) {
+            return { products: [], unavailable: true };
+          }
+          const products = (data.products || [])
             .map((p: Product & { product_name_en?: string }) => ({
               ...p,
               product_name: p.product_name_en || p.product_name,
@@ -116,15 +128,18 @@ function NutriFindPage() {
             }))
             .filter((p: Product) => p.product_name && p.nutriments)
             .slice(0, 20);
+          return { products, unavailable: false };
         } catch {
-          return [];
+          return { products: [], unavailable: true };
         }
       })();
 
       const usdaPromise = fetchUsda(usdaTerm);
 
       try {
-        const [off, usda] = await Promise.all([offPromise, usdaPromise]);
+        const [offResult, usda] = await Promise.all([offPromise, usdaPromise]);
+        const off = offResult.products;
+        setOffUnavailable(offResult.unavailable);
         setLoadingMsg("Merging & scoring…");
         const merged = mergeProductSources(off, usda).slice(0, 25);
         setCoverage({
@@ -134,7 +149,11 @@ function NutriFindPage() {
         });
         setRaw(merged);
         if (off.length === 0 && usda.length === 0) {
-          setError("No data returned from either source. Check your connection and try again.");
+          setError(
+            offResult.unavailable
+              ? "Open Food Facts is temporarily unavailable and USDA returned no matches. Try again in a moment."
+              : "No data returned from either source. Check your connection and try again."
+          );
         }
       } catch {
         setError("Couldn't load results. Check your connection and try again.");
