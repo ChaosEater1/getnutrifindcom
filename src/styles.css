@@ -300,6 +300,10 @@ html, body {
 .src-pill.src-off     { background:#E8F4FD; color:#1A6FA8; }
 .src-pill.src-usda    { background:#F0F8E8; color:#3A7D27; }
 .src-pill.src-patched { background:#FEF3C7; color:#92400E; }
+.src-pill.src-off-unavailable {
+  background:#FEE2E2; color:#991B1B;
+  border:1px dashed #FCA5A5; cursor:help;
+}
 .top-card-source { margin: 8px 0 4px; }
 .top-card-source .src-pill { background: rgba(255,255,255,0.18); color:#fff; }
 .loading-sub {
