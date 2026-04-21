@@ -95,14 +95,16 @@ function NutriFindPage() {
       // Kick off the AI tip in parallel
       loadAiTip(term);
 
-      const refinedTerm = activeMode === "meal" ? term : `${term} raw fresh`;
+      // OFF matches packaged products by name — keep the user's plain term so it actually finds matches.
+      // USDA's "raw fresh" suffix helps narrow to whole foods in ingredient mode.
+      const usdaTerm = activeMode === "meal" ? term : `${term} raw fresh`;
 
       setLoadingMsg("Searching Open Food Facts + USDA…");
 
       const offPromise = (async (): Promise<Product[]> => {
         try {
           const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
-            refinedTerm
+            term
           )}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,product_name_en,brands,nutriments,nutriscore_grade,ingredients_text,ingredients_text_en,labels_tags,code,quantity,stores,stores_tags,image_small_url`;
           const res = await fetch(url);
           const data = await res.json();
@@ -119,7 +121,7 @@ function NutriFindPage() {
         }
       })();
 
-      const usdaPromise = fetchUsda(refinedTerm);
+      const usdaPromise = fetchUsda(usdaTerm);
 
       try {
         const [off, usda] = await Promise.all([offPromise, usdaPromise]);
