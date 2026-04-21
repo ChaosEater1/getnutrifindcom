@@ -275,7 +275,16 @@ function NutriFindPage() {
           <>
             {rawResults.length > 0 && (
               <div className="coverage-bar">
-                <span className="src-pill src-off">📦 {coverage.off} Open Food Facts</span>
+                {offUnavailable ? (
+                  <span
+                    className="src-pill src-off-unavailable"
+                    title="Open Food Facts returned a temporary error (rate-limit or maintenance). Results below are from USDA only."
+                  >
+                    📦 OFF unavailable
+                  </span>
+                ) : (
+                  <span className="src-pill src-off">📦 {coverage.off} Open Food Facts</span>
+                )}
                 <span className="src-pill src-usda">🌾 {coverage.usda} USDA</span>
                 {coverage.patched > 0 && (
                   <span className="src-pill src-patched">
