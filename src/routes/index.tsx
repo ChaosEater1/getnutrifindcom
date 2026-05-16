@@ -248,10 +248,29 @@ function scoreColor(s) { return s >= 75 ? "#2d6a4f" : s >= 55 ? "#74c69d" : s >=
 function scoreLabel(s) { return s >= 75 ? "Excellent" : s >= 55 ? "Good" : s >= 35 ? "Fair" : "Poor"; }
 function severityColor(s) { return s === "high" ? "#e63946" : s === "medium" ? "#f4a261" : "#999"; }
 
+const NON_LATIN_RE = /[^\u0000-\u024F\u1E00-\u1EFF]/;
+const FOREIGN_WORD_RE = /\b(de|du|des|le|la|les|aux|avec|sans|pour|el|los|las|del|con|sin|para|der|die|das|mit|ohne|für|und|von|il|lo|gli|della|per|senza|com|sem|do|da|dos|das|ao|av|ed)\b/i;
+function isEnglishProduct(p) {
+  const name = p.product_name || "";
+  if (!name) return false;
+  if (NON_LATIN_RE.test(name)) return false;
+  if (p.product_name_en) return true;
+  if (p.lang && p.lang !== "en") return false;
+  if (FOREIGN_WORD_RE.test(name)) return false;
+  return true;
+}
+
 async function fetchOFF(query) {
-  const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20&fields=product_name,brands,ingredients_text,nutriments,nutriscore_grade,labels_tags,image_small_url`);
+  const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=40&lc=en&fields=product_name,product_name_en,brands,ingredients_text,ingredients_text_en,nutriments,nutriscore_grade,labels_tags,image_small_url,countries_tags,lang`);
   const data = await res.json();
-  return (data.products || []).filter(p => p.product_name).map(p => ({ ...p, _source: "Open Food Facts" }));
+  return (data.products || [])
+    .map(p => ({
+      ...p,
+      product_name: p.product_name_en || p.product_name,
+      ingredients_text: p.ingredients_text_en || p.ingredients_text,
+      _source: "Open Food Facts",
+    }))
+    .filter(p => p.product_name && isEnglishProduct(p));
 }
 async function fetchOFFBarcode(barcode) {
   const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
