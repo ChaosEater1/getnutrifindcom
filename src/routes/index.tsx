@@ -249,9 +249,16 @@ function scoreLabel(s) { return s >= 75 ? "Excellent" : s >= 55 ? "Good" : s >= 
 function severityColor(s) { return s === "high" ? "#e63946" : s === "medium" ? "#f4a261" : "#999"; }
 
 async function fetchOFF(query) {
-  const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20&fields=product_name,brands,ingredients_text,nutriments,nutriscore_grade,labels_tags,image_small_url`);
+  const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=40&lc=en&fields=product_name,product_name_en,brands,ingredients_text,ingredients_text_en,nutriments,nutriscore_grade,labels_tags,image_small_url,countries_tags,lang`);
   const data = await res.json();
-  return (data.products || []).filter(p => p.product_name).map(p => ({ ...p, _source: "Open Food Facts" }));
+  return (data.products || [])
+    .map(p => ({
+      ...p,
+      product_name: p.product_name_en || p.product_name,
+      ingredients_text: p.ingredients_text_en || p.ingredients_text,
+      _source: "Open Food Facts",
+    }))
+    .filter(p => p.product_name && isEnglishProduct(p));
 }
 async function fetchOFFBarcode(barcode) {
   const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
