@@ -249,6 +249,7 @@ function scoreLabel(s) { return s >= 75 ? "Excellent" : s >= 55 ? "Good" : s >= 
 function severityColor(s) { return s === "high" ? "#e63946" : s === "medium" ? "#f4a261" : "#999"; }
 
 async function fetchOFF(query) {
+  // defined above
   const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=40&lc=en&fields=product_name,product_name_en,brands,ingredients_text,ingredients_text_en,nutriments,nutriscore_grade,labels_tags,image_small_url,countries_tags,lang`);
   const data = await res.json();
   return (data.products || [])
