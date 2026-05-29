@@ -26,3 +26,10 @@ In Cloudflare Dashboard → your Pages project → Settings → Environment vari
 
 ## SPA routing
 `dist/_redirects` handles client-side routes (`/* /index.html 200`).
+
+## Notes
+The Pages Function uses Cloudflare's `onRequestPost({ request, env })` handler
+(not Netlify's `exports.handler`). `GEMINI_API_KEY` is read from `env`, which
+Cloudflare populates from the Pages environment variables you configure in the
+dashboard. The function is wrapped in `/.netlify/functions/` only so the
+existing frontend URLs keep working with no code changes.
