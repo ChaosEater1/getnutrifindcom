@@ -41,7 +41,7 @@ async function translateProductNames(products) {
 
   try {
     const nameList = toTranslate.map((p, i) => `${i + 1}. ${p.product_name}`).join("\n");
-    const res = await fetch("/.netlify/functions/claude", {
+    const res = await fetch("/claude", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -259,14 +259,14 @@ function scoreLabel(s){return s>=75?"Excellent":s>=55?"Good":s>=35?"Fair":"Poor"
 function severityColor(s){return s==="high"?"#e63946":s==="medium"?"#f4a261":"#999";}
 
 async function fetchOFF(query) {
-  const res = await fetch(`/.netlify/functions/openfoodfacts?path=/cgi/search.pl&search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,brands,ingredients_text,nutriments,nutriscore_grade,labels_tags,image_small_url,lang`);
+  const res = await fetch(`/openfoodfacts?path=/cgi/search.pl&search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=30&lc=en&fields=product_name,brands,ingredients_text,nutriments,nutriscore_grade,labels_tags,image_small_url,lang`);
   const data = await res.json();
   return (data.products||[])
     .filter(p => p.product_name && isEnglish(p))
     .map(p => ({...p, _source:"Open Food Facts"}));
 }
 async function fetchOFFBarcode(barcode) {
-  const res = await fetch(`/.netlify/functions/openfoodfacts?path=/api/v0/product/${encodeURIComponent(barcode)}.json`);
+  const res = await fetch(`/openfoodfacts?path=/api/v0/product/${encodeURIComponent(barcode)}.json`);
   const data = await res.json();
   if (data.status===1&&data.product?.product_name&&isEnglish(data.product)) return {...data.product, _source:"Open Food Facts"};
   return null;
@@ -348,7 +348,7 @@ function NutriFind() {
     try {
       const goalLabel=GOALS.find(g=>g.id===profile.goal)?.label||"general health";
       const modeLabel=mode==="ingredient"?"a raw ingredient":mode==="meal"?"a packaged/prepared meal":"an ingredient for home cooking";
-      const res=await fetch("/.netlify/functions/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`You are a concise nutritionist. The user is searching for ${modeLabel} with a health goal of: ${goalLabel}. Give a 2-3 sentence practical tip tailored to their goal about what to look for and avoid. No bullet points, plain prose only.`,messages:[{role:"user",content:`What should I look for when buying: ${q}`}]})});
+      const res=await fetch("/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`You are a concise nutritionist. The user is searching for ${modeLabel} with a health goal of: ${goalLabel}. Give a 2-3 sentence practical tip tailored to their goal about what to look for and avoid. No bullet points, plain prose only.`,messages:[{role:"user",content:`What should I look for when buying: ${q}`}]})});
       const data=await res.json();setAiTip(data.content?.[0]?.text||"");
     } catch{setAiTip("");}
     setAiLoading(false);
@@ -364,7 +364,7 @@ function NutriFind() {
       const allergenNote=(profile.allergens||[]).length>0?`The user is allergic to: ${profile.allergens.join(", ")}.`:"";
 
       // Step 1: Ask AI for ingredient list
-      const res=await fetch("/.netlify/functions/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`You are a nutritionist and chef. The user wants to cook a dish at home. Their health goal is ${goalLabel}. ${allergenNote} Return ONLY a JSON object with this exact structure, no other text, no markdown:\n{"dish":"<dish name>","servings":4,"ingredients":[{"name":"<simple ingredient name>","amount":"<amount>","unit":"<unit>","category":"<protein|vegetable|grain|dairy|fat|herb|other>","healthNote":"<one sentence why this is good>","substitution":"<one healthier or cheaper alternative if relevant, or null>"}],"cookingTip":"<one sentence tip for making this dish healthier>","totalEstimatedCost":"<estimated cost range in USD for all ingredients>"}`,messages:[{role:"user",content:`Break down the ingredients for: ${dish}. Optimise for ${goalLabel}. Keep ingredient names simple and searchable (e.g. "chicken breast" not "free-range organic chicken breast fillet").`}]})});
+      const res=await fetch("/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`You are a nutritionist and chef. The user wants to cook a dish at home. Their health goal is ${goalLabel}. ${allergenNote} Return ONLY a JSON object with this exact structure, no other text, no markdown:\n{"dish":"<dish name>","servings":4,"ingredients":[{"name":"<simple ingredient name>","amount":"<amount>","unit":"<unit>","category":"<protein|vegetable|grain|dairy|fat|herb|other>","healthNote":"<one sentence why this is good>","substitution":"<one healthier or cheaper alternative if relevant, or null>"}],"cookingTip":"<one sentence tip for making this dish healthier>","totalEstimatedCost":"<estimated cost range in USD for all ingredients>"}`,messages:[{role:"user",content:`Break down the ingredients for: ${dish}. Optimise for ${goalLabel}. Keep ingredient names simple and searchable (e.g. "chicken breast" not "free-range organic chicken breast fillet").`}]})});
       const data=await res.json();
       const text=data.content?.[0]?.text||"{}";
       let parsed;
