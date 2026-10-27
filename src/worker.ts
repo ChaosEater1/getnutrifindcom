@@ -18,7 +18,7 @@ const json = (body: unknown, status = 200) =>
 
 const corsOnly = () => new Response(null, { status: 204, headers: cors });
 
-async function handleClaude(request: Request, env: Env) {
+async function handleClaude(request: Request, env: Env = {}) {
   if (request.method === "OPTIONS") return corsOnly();
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
