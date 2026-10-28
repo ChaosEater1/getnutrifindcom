@@ -84,6 +84,35 @@ async function handleClaude(request: Request, env: Env = {}) {
   }
 }
 
+async function handleUsda(request: Request) {
+  if (request.method === "OPTIONS") return corsOnly();
+  if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
+
+  const params = new URL(request.url).searchParams;
+
+  try {
+    const response = await fetch(
+      `https://api.nal.usda.gov/fdc/v1/foods/search?${params.toString()}`,
+      {
+        headers: {
+          "User-Agent": "NutriFind/1.0 (https://getnutrifind.com)",
+          Accept: "application/json",
+        },
+      },
+    );
+
+    return new Response(await response.text(), {
+      status: response.status,
+      headers: {
+        "Content-Type": response.headers.get("content-type") || "application/json",
+        ...cors,
+      },
+    });
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Upstream error" }, 502);
+  }
+}
+
 async function handleOpenFoodFacts(request: Request) {
   if (request.method === "OPTIONS") return corsOnly();
   if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
@@ -125,6 +154,7 @@ export default {
 
     if (path === "/claude") return handleClaude(request, env);
     if (path === "/openfoodfacts") return handleOpenFoodFacts(request);
+    if (path === "/usda") return handleUsda(request);
 
     return appEntry.fetch(request);
   },
