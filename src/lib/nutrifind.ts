@@ -230,7 +230,7 @@ function normaliseUsda(food: UsdaFood): Product {
 
 export async function fetchUsda(query: string): Promise<Product[]> {
   try {
-    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(
+    const url = `/usda?query=${encodeURIComponent(
       query
     )}&dataType=Branded,SR%20Legacy,Foundation&pageSize=15&api_key=${USDA_API_KEY}`;
     const res = await fetch(url);

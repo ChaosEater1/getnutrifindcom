@@ -272,7 +272,7 @@ async function fetchOFFBarcode(barcode) {
   return null;
 }
 async function fetchUSDA(query) {
-  const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&dataType=Branded,Survey (FNDDS)&pageSize=15&api_key=${USDA_API_KEY}`);
+  const res = await fetch(`/usda?query=${encodeURIComponent(query)}&dataType=Branded,Survey (FNDDS)&pageSize=15&api_key=${USDA_API_KEY}`);
   const data = await res.json();
   return (data.foods||[]).map(normaliseUsda);
 }
