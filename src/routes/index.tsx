@@ -913,4 +913,14 @@ function ProductCard({product,isTop,expanded,setExpanded,isSaved,toggleSave,isCo
 }
 
 
-export const Route = createFileRoute("/")({ component: NutriFind });
+export const Route = createFileRoute("/")({
+  component: NutriFind,
+  head: () => ({ meta: [
+    { title: "NutriFind — Compare Food and Nutrition" },
+    { name: "description", content: "Find foods, compare nutrition scores, and explore ingredients with NutriFind." },
+    { property: "og:title", content: "NutriFind — Compare Food and Nutrition" },
+    { property: "og:description", content: "Find foods, compare nutrition scores, and explore ingredients with NutriFind." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
+});
