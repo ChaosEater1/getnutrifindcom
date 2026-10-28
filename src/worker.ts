@@ -19,42 +19,40 @@ const json = (body: unknown, status = 200) =>
 const corsOnly = () => new Response(null, { status: 204, headers: cors });
 
 async function handleClaude(request: Request, env: Env = {}) {
-  if (request.method === "OPTIONS") return corsOnly();
-  if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
-
-  const apiKey = env.GEMINI_API_KEY;
-  if (!apiKey) return json({ error: "GEMINI_API_KEY not configured" }, 500);
-
-  let payload: {
-    system?: string;
-    messages?: Array<{ role?: string; content?: unknown }>;
-    max_tokens?: number;
-  };
+  const requestId = crypto.randomUUID();
+  let stage = "request";
+  let status = 500;
+  let apiKey: string | undefined;
   try {
-    payload = await request.json();
-  } catch {
-    return json({ error: "Invalid JSON body" }, 400);
-  }
+    if (request.method === "OPTIONS") return corsOnly();
+    if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-  const { system, messages = [], max_tokens } = payload;
-  const contents = messages.map((message) => ({
-    role: message.role === "assistant" ? "model" : "user",
-    parts: [
-      {
-        text:
-          typeof message.content === "string"
-            ? message.content
-            : JSON.stringify(message.content ?? ""),
-      },
-    ],
-  }));
+    stage = "configuration";
+    apiKey = env.GEMINI_API_KEY;
+    console.info("[claude] configuration", { requestId, geminiKeyConfigured: Boolean(apiKey) });
+    if (!apiKey) throw new Error("GEMINI_API_KEY not configured in Worker env bindings");
 
-  try {
+    stage = "request parsing";
+    status = 400;
+    const payload = (await request.json()) as {
+      system?: string;
+      messages?: Array<{ role?: string; content?: unknown }>;
+      max_tokens?: number;
+    };
+    const { system, messages = [], max_tokens } = payload;
+    if (!Array.isArray(messages)) throw new Error("messages must be an array");
+    const contents = messages.map((message) => ({
+      role: message.role === "assistant" ? "model" : "user",
+      parts: [{ text: typeof message.content === "string" ? message.content : JSON.stringify(message.content ?? "") }],
+    }));
+
+    stage = "Gemini request";
+    status = 502;
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           contents,
           ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
@@ -64,23 +62,32 @@ async function handleClaude(request: Request, env: Env = {}) {
         }),
       },
     );
+    console.info("[claude] Gemini response", { requestId, status: response.status });
+    stage = "Gemini response parsing";
     const data = (await response.json()) as {
       error?: { message?: string };
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
     };
 
     if (!response.ok) {
-      return json(
-        { error: data.error?.message || "Gemini error", details: data },
-        response.status,
-      );
+      stage = "Gemini API error";
+      status = response.status;
+      throw new Error(data.error?.message || `Gemini returned HTTP ${response.status}`);
     }
 
     const text =
       data.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
     return json({ content: [{ type: "text", text }] });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Upstream error" }, 502);
+    // Never return or log credentials, even if an upstream error echoes them.
+    const redact = (value: string) => apiKey
+      ? value.split(apiKey).join("[REDACTED]").split(encodeURIComponent(apiKey)).join("[REDACTED]")
+      : value;
+    const message = redact(error instanceof Error ? error.message : String(error));
+    const stack = redact(error instanceof Error ? error.stack || "" : "");
+    const diagnostics = { error: message, stack, stage, requestId };
+    console.error("[claude] handler failed", { ...diagnostics, status });
+    return json(diagnostics, status);
   }
 }
 
