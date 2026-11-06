@@ -16,6 +16,9 @@ const json = (body: unknown, status = 200) =>
     headers: { "Content-Type": "application/json", ...cors },
   });
 
+const PERMISSIVE_CSP =
+  "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; img-src 'self' data: blob: https:; connect-src 'self' https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:";
+
 const corsOnly = () => new Response(null, { status: 204, headers: cors });
 
 async function handleClaude(request: Request, env: Env = {}) {
@@ -159,10 +162,20 @@ export default {
   async fetch(request: Request, env: Env) {
     const path = new URL(request.url).pathname;
 
-    if (path === "/claude") return handleClaude(request, env);
-    if (path === "/openfoodfacts") return handleOpenFoodFacts(request);
-    if (path === "/usda") return handleUsda(request);
+    let response: Response;
+    if (path === "/claude") response = await handleClaude(request, env);
+    else if (path === "/openfoodfacts") response = await handleOpenFoodFacts(request);
+    else if (path === "/usda") response = await handleUsda(request);
+    else response = await appEntry.fetch(request);
 
-    return appEntry.fetch(request);
+    // Replace any restrictive CSP (e.g. default-src 'none') with one that allows the app to run.
+    const headers = new Headers(response.headers);
+    headers.delete("Content-Security-Policy");
+    headers.set("Content-Security-Policy", PERMISSIVE_CSP);
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   },
 };
